@@ -5,7 +5,7 @@ from intervention import (dishwasher, calculatron, intervention_identification,
 
 st.set_page_config(page_title='Intervention Analysis Tool', layout='wide')
 
-def file_processor(filename):
+def file_processor(filename, num_intervention, num_high_potential):
     '''
         file (.csv file): 
             student data file
@@ -22,19 +22,19 @@ def file_processor(filename):
     overall_scores, skills, id_col, name_col, psat_cols, overall_cols = calculatron(df)
 
     intervention_targets = intervention_identification(overall_scores, skills, id_col, name_col, 
-                                                       psat_cols, overall_cols, grade)
+                                                       psat_cols, overall_cols, grade, num_students=num_intervention)
 
     high_growth = high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_cols, 
-                                 grade, benchmarks, num_students=15)
+                                 grade, benchmarks, num_students=num_high_potential)
 
     return {
         'grade': grade,
         'school_year': school_year,
+        'overall_scores': overall_scores,
         'intervention_targets': intervention_targets,
         'high_growth': high_growth,
         'skills': skills,
         'id_col': id_col,
-        'grade': grade,
         'benchmarks': benchmarks
     }
 
@@ -49,6 +49,14 @@ def main():
 
         st.divider()
 
+        st.header('List Settings')
+        num_intervention = st.number_input('Number of Intervention Students', min_value=1,
+                                           max_value=50, value=20, step=1)
+        num_high_potential = st.number_input('Number of high potential students', min_value=1,
+                                             max_value=50, value=15, step=1)
+        
+        st.divider()
+
         # Benchmarks settings
         st.header('Benchmark Settings')
         benchmarks = load_config()
@@ -60,30 +68,46 @@ def main():
             save_config(updated_benchmarks)
             st.success('Benchmarks saved!')
 
-        # Grade selector
-        st.divider()
-        st.header('Select Grade')
-
     # Process uploaded files
     if not uploaded_files:
         st.info('Please upload one or more grade level CSV files to get started.')
+        if 'results' in st.session_state:
+            del st.session_state['results']
         return
+    
+    file_names = [f.name for f in uploaded_files]
+    if ('results' not in st.session_state or
+        st.session_state.get('file_names') != file_names or
+        st.session_state.get('num_intervention') != num_intervention or
+        st.session_state.get('num_high_potential') != num_high_potential):
 
     # Process all files and store results
-    results = {}
-    for file in uploaded_files:
-        data = file_processor(file)
-        if data:
-            label = f"Grade {data['grade']} — {data['school_year']}"
-            results[label] = data
+        results = {}
+        for file in uploaded_files:
+            data = file_processor(file, num_intervention, num_high_potential)
+            if data:
+                label = f"Grade {data['grade']} — {data['school_year']}"
+                results[label] = data
 
+        st.session_state['results'] = results
+        st.session_state['file_names'] = file_names
+        st.session_state['num_intervention'] = num_intervention
+        st.session_state['num_high_potential'] = num_high_potential
+
+    results = st.session_state['results']
     if not results:
         return
 
-    # Grade selector dropdown in sidebar
+    # Grade selector
     with st.sidebar:
+        st.divider()
+        st.header('Select Grade')
         selected_grade = st.selectbox('Select Grade', options=list(results.keys()))
 
+    if not selected_grade:
+        st.info('Please select a grade to view results.')
+        return
+    
     # Display selected grade
     data = results[selected_grade]
     st.header(f"{selected_grade}")
@@ -97,21 +121,17 @@ def main():
 
     with high_potential_tab:
         st.subheader('High Potential Targets')
+        if len(data['high_growth']) < num_high_potential:
+            st.warning(f'Only {len(data['high_growth'])} students elgible after excluding intervention targets. Consider reducing the number of students for intervention.')
+
         include_priority = st.checkbox('Show Priority Areas', value=False)
     
         if include_priority:
-            high_growth_with_priority = high_potential(
-                pd.DataFrame(data['high_growth']),
+            high_growth_with_priority = skill_area_identification(
+                data['high_growth'],
                 data['skills'],
                 data['id_col'],
-                data['intervention_targets'].columns[1],
-                [col for col in data['high_growth'].columns if 'psat' in col.lower()],
-                [col for col in data['high_growth'].columns if 'overall' in col.lower()
-                 and col != 'Average Overall'],
                 data['grade'],
-                data['benchmarks'],
-                num_students=15,
-                include_priority_areas=True
             )
             st.dataframe(high_growth_with_priority, width='stretch')
         else:
