@@ -14,16 +14,16 @@ This program will only work if each grade has their own file, so click on Add St
 # Step 3:
 Now you should have the assessments to the left and the student names and IDs to the right. We will start selecting our data. Click on the I-Ready Results folder, which will reveal Math and Reading results for I-Ready. Since the program can handle both Math and Reading, we will have to do this one folder at a time (i.e. we will have one file for 9th grade math and another for 9th grade english).
 
-# Note:
+## Note:
 These I-Ready results are from the students' 8th grade testing data, so make sure that the data selected corresponds with the school year in which they were in 8th grade. 9th graders will be one year prior, 10th graders will be two years prior, and 11th graders will be three years prior. Current 8th graders should display their 7th grade test results at the beginning of the year, with their 8th grade data becoming available as the year progresses.
 
-# Note:
+## Note:
 The PSAT 10 and PSAT/NMSQT are identical. Here is a quick reference for the different PSATs:
   PSAT 8-9 is given to 8th and 9th graders
   PSAT 10 is given to 10th graders in the spring
   PSAT/NMSQT is given to 11th graders in the fall
 
-# If you select Math:
+### If you select Math:
 For this step we will be ignoring all columns that have 'Placement' in the name. We want to select the Fall, Winter, and Spring columns for each column type. Checkmark the following columns:
   Overall SS (Fall, Winter, Spring)
   Number and Op SS (Fall, Winter, Spring)
@@ -36,7 +36,7 @@ For this part of the step we will need to enter into one of the PSAT folders. Se
 
 There should be 19 columns in total.
 
-# If you select Reading:
+### If you select Reading:
 For this step we will be ignoring all columns that have 'Placement' in the name as well as the Phonological Awareness column. We want to select the Fall, Winter, and Spring columns for each column type. Checkmark the following columns:
   Overall SS (Fall, Winter, Spring)
   Phonics SS (Fall, Winter, Spring)
