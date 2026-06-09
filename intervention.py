@@ -1,37 +1,6 @@
 import pandas as pd
-import json
 import os
 import re
-#! add ELA categories
-#! add toggle for english and math
-#! revisit benchmark items
-
-DEFAULT_BENCHMARKS = {
-    'Number And Op': 70,
-    'Geometry': 70,
-    'Measure And Data': 70,
-    'Alg And Alg Thinking': 70
-}
-
-CONFIG_FILE = 'config.json'
-
-def load_config():
-    '''
-        Loads config file if it exists, otherwise creates one with default benchmarks
-    '''
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    else:
-        save_config(DEFAULT_BENCHMARKS)
-        return DEFAULT_BENCHMARKS
-
-def save_config(benchmarks):
-    '''
-        Saves benchmark config to json file so changes persist between sessions
-    '''
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(benchmarks, f, indent=4)
 
 def parse_filename(filename):
     '''
@@ -45,21 +14,22 @@ def parse_filename(filename):
     '''
     # Strips .csv from file name and infers year and grade
     basename = os.path.basename(filename).replace('.csv', '')
-    match = re.match(r'(\d{6})_?(\d+)thgrade', basename, re.IGNORECASE)
+    match = re.match(r'(\d{6})_?(\d+)th(\w+)', basename, re.IGNORECASE)
 
     # If file name doesn't match expected naming scheme, throw error
     if not match:
         raise ValueError(
             f"Could not detect grade level from filename '{basename}'. "
-            "Please rename the file following the pattern: 025026_9thgrade.csv"
+            "Please rename the file following the pattern: 025026_9thgrade_subject.csv"
         )
 
     # .group(1) refers to the first group of parenthesis in match, set to the year
     # .group(2) refers to the second group of parenthesis in match, set to the grade
     year_str = match.group(1)
     grade = int(match.group(2))
+    subject = match.group(3).title()
     school_year = f"20{year_str[1:3]}-20{year_str[4:]}"
-    return grade, school_year
+    return grade, school_year, subject
 
 def dishwasher(filename):
     '''
@@ -76,19 +46,20 @@ def dishwasher(filename):
     # If false, filename is a string
     # This is necessary in order to run program from terminal and streamlit app without crashing
     if hasattr(filename, 'name'):
-        grade, school_year = parse_filename(filename.name)
+        grade, school_year, subject = parse_filename(filename.name)
         df = pd.read_csv(filename, header=0)
     else:
-        grade, school_year = parse_filename(filename)
+        grade, school_year, subject = parse_filename(filename)
         df = pd.read_csv(filename, header=0)
 
+    df.columns = df.columns.str.replace('\n', ' ').str.strip()
     # Creates list of columns with 'Overall' in the column name, removes rows where all overall columns are NaN
     overall_cols = [col for col in df.columns if 'overall' in col.lower()]
     if overall_cols:
-        mask = df[overall_cols].isna().all(axis=1)
+        mask = df[overall_cols].notna().sum(axis=1) < 2
         df = df[~mask]
 
-    return df, grade, school_year
+    return df, grade, school_year, subject
 
 def calculatron(df):
     '''
@@ -126,23 +97,43 @@ def calculatron(df):
         'Number and Op': 'number and op',
         'Geometry': 'geometry',
         'Measure and Data': 'measure and data',
-        'Alg and Alg Thinking': 'alg and alg thinking'
+        'Alg and Alg Thinking': 'alg and alg thinking',
+        'Phonics': 'phonics',
+        'High Frequency Words': 'high frequency words',
+        'Vocabulary' : 'vocabulary',
+        'Reading Comp: Lit': 'reading comp: lit',
+        'Reading Comp: Inform Text': 'reading comp: inform text'
     }
     skill_groups = {}
     for display_name, keyword in skill_keywords.items():
-        matched = [col for col in df.columns if col.lower().startswith(keyword)]
+        matched = [col for col in df.columns if keyword in col.lower() and 'overall' not in col.lower()]
         if matched:
             skill_groups[display_name] = matched
 
     # Find fall and spring overall cols for growth
     fall_col = next((col for col in overall_cols if 'fall' in col.lower()), None)
+    winter_col = next((col for col in overall_cols if 'winter' in col.lower()), None)
     spring_col = next((col for col in overall_cols if 'spring' in col.lower()), None)
 
     # Build overall scores dataframe, calculate averages and growth
     overall_scores = df[[id_col, name_col] + overall_cols + psat_cols].copy()
     overall_scores['Average Overall'] = overall_scores[overall_cols].mean(axis=1)
-    if fall_col and spring_col:
-        overall_scores['Growth'] = overall_scores[spring_col] - overall_scores[fall_col]
+    
+    def calculate_growth(row):
+        fall = row[fall_col] if fall_col else None
+        winter  = row[winter_col] if winter_col else None
+        spring = row[spring_col] if spring_col else None
+
+        if pd.notna(fall) and pd.notna(spring):
+            return spring - fall
+        elif pd.notna(winter) and pd.notna(spring):
+            return spring - winter
+        elif pd.notna(fall) and pd.notna(winter):
+            return winter - fall
+        else:
+            return None
+        
+    overall_scores['Growth'] = overall_scores.apply(calculate_growth, axis=1)
 
     # Build skills dataframe, 
     skills = pd.DataFrame()
@@ -195,10 +186,6 @@ def skill_area_identification(target_df, skills, id_col, grade):
         return ', '.join([skill for skill, _ in sorted_skills]) if sorted_skills else 'No skill data available'
 
     merged_df['Priority Areas'] = merged_df.apply(get_priority_areas, axis=1)
-
-    print(target_df[id_col].tolist())
-    print(skills[id_col].tolist())
-
     return merged_df
 
 def intervention_identification(overall_scores, skills, id_col, name_col,
@@ -229,11 +216,11 @@ def intervention_identification(overall_scores, skills, id_col, name_col,
 
     output_cols = [id_col, name_col] + overall_cols + ['Average Overall', 'Growth'] + psat_cols + ['Priority Areas']
     output_cols = [col for col in output_cols if col in results.columns]
-
+    results.index = range(1, len(results) + 1)
     return results[output_cols]
 
 def high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_cols,
-                   grade, benchmarks, num_students=15, include_priority_areas=False):
+                   grade, num_students=15, include_priority_areas=False):
     '''
         Function:
             Returns top N highest growth students
@@ -245,7 +232,6 @@ def high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_
             psat_cols (list): List of PSAT column names
             overall_cols (list): List of overall score column names
             grade (int): Grade level
-            benchmarks (dict): Benchmark thresholds per skill
             num_students (int): Number of high growth students, default 15
             include_priority_areas (bool): Whether to include priority areas, default False
         Returns:
@@ -271,13 +257,12 @@ def high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_
         output_cols += ['Priority Areas']
 
     output_cols = [col for col in output_cols if col in enrichment_targets.columns]
-
+    enrichment_targets.index = range(1, len(enrichment_targets) + 1)
     return enrichment_targets[output_cols]
 
 def main():
     filename = input('Input filename: ')
     df, grade, school_year = dishwasher(filename)
-    benchmarks = load_config()
 
     print(f"\nProcessing {school_year} — Grade {grade}")
 
@@ -288,12 +273,11 @@ def main():
 
     high_growth = high_potential(
         overall_scores, skills, id_col, name_col, psat_cols, overall_cols,
-        grade, benchmarks, num_students=15)
+        grade, num_students=15)
 
     pd.set_option('display.max_colwidth', None)
     print('\nIntervention Targets:\n', intervention_targets)
-    # print('\nHigh Potential Students:\n', high_growth)
-    # intervention_targets.to_csv(f'Intervention_{grade}th_{school_year}.csv', index=False)
+    print('\nHigh Potential Students:\n', high_growth)
 
 if __name__ == '__main__':
     main()

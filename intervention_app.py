@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from intervention import (dishwasher, calculatron, intervention_identification, 
-                          high_potential, skill_area_identification, load_config, save_config)
+                          high_potential, skill_area_identification)
 
 st.set_page_config(page_title='Intervention Analysis Tool', layout='wide')
 
@@ -13,29 +13,35 @@ def file_processor(filename, num_intervention, num_high_potential):
         returns: analyzed data
     '''
     try:
-        df, grade, school_year = dishwasher(filename)
+        df, grade, school_year, subject = dishwasher(filename)
     except ValueError as e:
         st.error(f"Error processing '{filename.name}': {e}")
+        print(f"ValueError: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Error processing '{filename.name}': {e}")
+        print(f"ValueError: {e}")
         return None
 
-    benchmarks = load_config()
+    ordinal = 'th' if grade not in [1,2,3] else ['st', 'nd', 'rd'][grade-1]
+    label = f"{grade}{ordinal} Grade {subject} - {school_year}"
     overall_scores, skills, id_col, name_col, psat_cols, overall_cols = calculatron(df)
-
     intervention_targets = intervention_identification(overall_scores, skills, id_col, name_col, 
                                                        psat_cols, overall_cols, grade, num_students=num_intervention)
 
     high_growth = high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_cols, 
-                                 grade, benchmarks, num_students=num_high_potential)
+                                 grade, num_students=num_high_potential)
 
     return {
         'grade': grade,
         'school_year': school_year,
+        'subject': subject,
+        'label': label,
         'overall_scores': overall_scores,
         'intervention_targets': intervention_targets,
         'high_growth': high_growth,
         'skills': skills,
-        'id_col': id_col,
-        'benchmarks': benchmarks
+        'id_col': id_col
     }
 
 def main():
@@ -57,17 +63,6 @@ def main():
         
         st.divider()
 
-        # Benchmarks settings
-        st.header('Benchmark Settings')
-        benchmarks = load_config()
-        updated_benchmarks = {}
-        for skill, value in benchmarks.items():
-            updated_benchmarks[skill] = st.number_input(skill, min_value=0, 
-                                                        max_value=100, value=value, step=1)
-        if st.button('Save Benchmarks'):
-            save_config(updated_benchmarks)
-            st.success('Benchmarks saved!')
-
     # Process uploaded files
     if not uploaded_files:
         st.info('Please upload one or more grade level CSV files to get started.')
@@ -86,8 +81,8 @@ def main():
         for file in uploaded_files:
             data = file_processor(file, num_intervention, num_high_potential)
             if data:
-                label = f"Grade {data['grade']} — {data['school_year']}"
-                results[label] = data
+                #label = f"Grade {data['grade']} — {data['school_year']}"
+                results[data['label']] = data
 
         st.session_state['results'] = results
         st.session_state['file_names'] = file_names
@@ -100,7 +95,6 @@ def main():
 
     # Grade selector
     with st.sidebar:
-        st.divider()
         st.header('Select Grade')
         selected_grade = st.selectbox('Select Grade', options=list(results.keys()))
 
@@ -133,6 +127,7 @@ def main():
                 data['id_col'],
                 data['grade'],
             )
+            high_growth_with_priority.index = range(1, len(high_growth_with_priority) + 1)
             st.dataframe(high_growth_with_priority, width='stretch')
         else:
             st.dataframe(data['high_growth'], width='stretch')
