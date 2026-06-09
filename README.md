@@ -1,4 +1,4 @@
-# intervention
+# Intervention
 A guide to using the intervention analysis tool
 
 Website: https://intervention-tool.streamlit.app
