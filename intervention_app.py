@@ -23,6 +23,7 @@ def file_processor(filename, num_intervention, num_high_potential):
         print(f"ValueError: {e}")
         return None
 
+    # ordinal and label handle file name processing
     ordinal = 'th' if grade not in [1,2,3] else ['st', 'nd', 'rd'][grade-1]
     label = f"{grade}{ordinal} Grade {subject} - {school_year}"
     overall_scores, skills, id_col, name_col, psat_cols, overall_cols = calculatron(df)
@@ -47,6 +48,7 @@ def file_processor(filename, num_intervention, num_high_potential):
 def main():
     st.title('Intervention Analysis Tool')
 
+    # Instructions
     with st.expander('Instructions'):
         st.markdown("""
 A guide to using the intervention analysis tool
@@ -114,9 +116,11 @@ For the 2026-2027 9th grade english file the file name would be 026027_9thenglis
 # Step 5:
 Go to the website and click upload. Select your files and click open. The website will automatically analyze the student data. To change the amount of students in the intervention or the high potential list, adjust the respective quantities under List Settings. To change the file that is being shown on the main page, scroll down to the Select Grade dropdown menu, and select the desired file.
 
-                    """)
+   
+### Reminder: While this can identify intervention targets instantly, it is still a good idea to observe students for at least 10 school days to determine if the test results are accurate.
+                                     """)
 
-    # Sidebar
+    # Upload files and List Settings section
     with st.sidebar:
         st.header('Upload Files')
         uploaded_files = st.file_uploader('Upload grade level CSV files',
@@ -132,7 +136,8 @@ Go to the website and click upload. Select your files and click open. The websit
         
         st.divider()
 
-    # Process uploaded files
+    # If true, nothing has been uploaded
+    # False, a file has been uploaded
     if not uploaded_files:
         st.info('Please upload one or more grade level CSV files to get started.')
         if 'results' in st.session_state:
@@ -150,7 +155,6 @@ Go to the website and click upload. Select your files and click open. The websit
         for file in uploaded_files:
             data = file_processor(file, num_intervention, num_high_potential)
             if data:
-                #label = f"Grade {data['grade']} — {data['school_year']}"
                 results[data['label']] = data
 
         st.session_state['results'] = results
@@ -188,7 +192,8 @@ Go to the website and click upload. Select your files and click open. The websit
             st.warning(f'Only {len(data['high_growth'])} students elgible after excluding intervention targets. Consider reducing the number of students for intervention.')
 
         include_priority = st.checkbox('Show Priority Areas', value=False)
-    
+        
+        # Priority toggle for enrichment targets
         if include_priority:
             high_growth_with_priority = skill_area_identification(
                 data['high_growth'],

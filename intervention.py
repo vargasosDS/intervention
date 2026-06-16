@@ -25,6 +25,7 @@ def parse_filename(filename):
 
     # .group(1) refers to the first group of parenthesis in match, set to the year
     # .group(2) refers to the second group of parenthesis in match, set to the grade
+    # .group(3) refers to the third group of parenthesis in the match, set to the subject
     year_str = match.group(1)
     grade = int(match.group(2))
     subject = match.group(3).title()
@@ -104,22 +105,26 @@ def calculatron(df):
         'Reading Comp: Lit': 'reading comp: lit',
         'Reading Comp: Inform Text': 'reading comp: inform text'
     }
+
+    # Compares skill_keywords dict to df.columns, adds upon finding a match
     skill_groups = {}
     for display_name, keyword in skill_keywords.items():
         matched = [col for col in df.columns if keyword in col.lower() and 'overall' not in col.lower()]
         if matched:
             skill_groups[display_name] = matched
 
-    # Find fall and spring overall cols for growth
+    # Find fall, winter and spring overall cols for growth
     fall_col = next((col for col in overall_cols if 'fall' in col.lower()), None)
     winter_col = next((col for col in overall_cols if 'winter' in col.lower()), None)
     spring_col = next((col for col in overall_cols if 'spring' in col.lower()), None)
 
-    # Build overall scores dataframe, calculate averages and growth
+    # Build overall scores dataframe, includes: id_col, name_col, overall_cols and psat_cols
+    # This dataframe calculate averages and growth
     overall_scores = df[[id_col, name_col] + overall_cols + psat_cols].copy()
     overall_scores['Average Overall'] = overall_scores[overall_cols].mean(axis=1)
     
     def calculate_growth(row):
+        # Checks to see if seasonal test results exist, only calculating growth between scores that are not NA
         fall = row[fall_col] if fall_col else None
         winter  = row[winter_col] if winter_col else None
         spring = row[spring_col] if spring_col else None
@@ -135,7 +140,7 @@ def calculatron(df):
         
     overall_scores['Growth'] = overall_scores.apply(calculate_growth, axis=1)
 
-    # Build skills dataframe, 
+    # Build skills dataframe, calculates averages for each skill
     skills = pd.DataFrame()
     skills[id_col] = df[id_col]
     for skill, columns in skill_groups.items():
@@ -212,8 +217,9 @@ def intervention_identification(overall_scores, skills, id_col, name_col,
     intervention_list = overall_scores.sort_values(
         by='Average Overall').head(num_students).reset_index(drop=True)
 
+    # Creates final dataframe, with all key info
+    # results.index tidies things up
     results = skill_area_identification(intervention_list, skills, id_col, grade)
-
     output_cols = [id_col, name_col] + overall_cols + ['Average Overall', 'Growth'] + psat_cols + ['Priority Areas']
     output_cols = [col for col in output_cols if col in results.columns]
     results.index = range(1, len(results) + 1)
@@ -256,6 +262,8 @@ def high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_
         enrichment_targets = skill_area_identification(enrichment_targets, skills, id_col, grade)
         output_cols += ['Priority Areas']
 
+    # Appends columns to output_cols if they also exist in enrichment_targets
+    # enrichment_targets.index tidies things up
     output_cols = [col for col in output_cols if col in enrichment_targets.columns]
     enrichment_targets.index = range(1, len(enrichment_targets) + 1)
     return enrichment_targets[output_cols]
@@ -263,17 +271,14 @@ def high_potential(overall_scores, skills, id_col, name_col, psat_cols, overall_
 def main():
     filename = input('Input filename: ')
     df, grade, school_year = dishwasher(filename)
-
     print(f"\nProcessing {school_year} — Grade {grade}")
 
     overall_scores, skills, id_col, name_col, psat_cols, overall_cols = calculatron(df)
+    intervention_targets = intervention_identification(overall_scores, skills, id_col, 
+                                                       name_col, psat_cols, overall_cols, grade)
 
-    intervention_targets = intervention_identification(
-        overall_scores, skills, id_col, name_col, psat_cols, overall_cols, grade)
-
-    high_growth = high_potential(
-        overall_scores, skills, id_col, name_col, psat_cols, overall_cols,
-        grade, num_students=15)
+    high_growth = high_potential(overall_scores, skills, id_col, name_col, psat_cols,
+                                 overall_cols, grade, num_students=15)
 
     pd.set_option('display.max_colwidth', None)
     print('\nIntervention Targets:\n', intervention_targets)
