@@ -63,3 +63,5 @@ For the 2026-2027 9th grade english file the file name would be 026027_9thenglis
 
 # Step 5:
 Go to the website and click upload. Select your files and click open. The website will automatically analyze the student data. To change the amount of students in the intervention or the high potential list, adjust the respective quantities under List Settings. To change the file that is being shown on the main page, scroll down to the Select Grade dropdown menu, and select the desired file.
+
+### Reminder: While this can identify intervention targets instantly, it is still a good idea to observe students for at least 10 school days to determine if the test results are accurate.
